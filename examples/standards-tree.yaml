@@ -1,0 +1,40 @@
+nodes:
+- path: .stdidx/GENERAL.md
+  title: General Code Standards
+  description: Cross-language general coding standards and best practices.
+  scope: '*'
+  topics:
+  - containerization
+  - docker
+  - makefiles
+  - pre-commit
+  - integration-tests
+  children: []
+- path: .stdidx/golang/GENERAL.md
+  title: Golang General Standards
+  description: General standards for writing Go applications.
+  scope: '*.go'
+  topics:
+  - golang
+  children:
+  - path: .stdidx/golang/API.md
+    title: Golang REST API Standards
+    description: Standards for writing REST APIs in Go.
+    scope: '*.go'
+    topics:
+    - golang
+    - api
+    - rest
+    - gin-gonic
+    children: []
+  - path: .stdidx/golang/WORKER.md
+    title: Golang Worker Standards
+    description: Standards for writing background workers in Go.
+    scope: '*.go'
+    topics:
+    - golang
+    - worker
+    - rabbitmq
+    - message-broker
+    - amqp
+    children: []
