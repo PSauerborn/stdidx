@@ -30,6 +30,6 @@ repos:
   hooks:
   - id: unittests
     name: Run API Unit Tests
-    entry: make run-test-image
+    entry: make run-tests
     language: system
     pass_filenames: false
