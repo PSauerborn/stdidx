@@ -1,0 +1,48 @@
+nodes:
+- path: tests/tmp/GENERAL.md
+  title: General Code Standards
+  description: Cross-language general coding standards and best practices.
+  scope: '*'
+  topics:
+  - general
+  - docker
+  - makefiles
+  - pre-commit
+  children: []
+- path: tests/tmp/golang/GENERAL.md
+  title: Golang General Standards
+  description: General standards for writing Go applications.
+  scope: '*.go'
+  topics:
+  - golang
+  children:
+  - path: tests/tmp/golang/API.md
+    title: Golang REST API Standards
+    description: Standards for writing REST APIs in Go.
+    scope: '*.go'
+    topics:
+    - golang
+    - api
+    - rest
+    - gin-gonic
+    children:
+    - path: tests/tmp/golang/frameworks/GIN-GONIC.md
+      title: Golang Gin-Gonic Standards
+      description: Standards for using Gin Gonic framework.
+      scope: '*.go'
+      topics:
+      - golang
+      - api
+      - gin-gonic
+      children: []
+  - path: tests/tmp/golang/WORKER.md
+    title: Golang Worker Standards
+    description: Standards for writing background workers in Go.
+    scope: '*.go'
+    topics:
+    - golang
+    - worker
+    - rabbitmq
+    - message-broker
+    - amqp
+    children: []
