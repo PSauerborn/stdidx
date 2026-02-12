@@ -10,28 +10,52 @@ on:
 
 jobs:
   build:
-    name: Build Simulations
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.os }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        cpu_arch: [arm64, amd64]
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            artifact_name: stdidx-linux-amd64
+            build_args: GOOS=linux GOARCH=amd64
+
+          - os: linux
+            arch: arm64
+            runner: ubuntu-latest
+            artifact_name: stdidx-linux-arm64
+            build_args: GOOS=linux GOARCH=arm64
+
+          - os: macos
+            arch: amd64
+            runner: macos-15  # Intel runner
+            artifact_name: stdidx-darwin-amd64
+            build_args: GOOS=darwin GOARCH=amd64
+
+          - os: macos
+            arch: arm64
+            runner: macos-15-intel  # Silicone runner
+            artifact_name: stdidx-darwin-arm64
+            build_args: GOOS=darwin GOARCH=arm64
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build Binary
+        run: |
+          echo "Building for ${{ matrix.os }} on ${{ matrix.arch }}..."
+          ${{ matrix.build_args }} go build -o bin/${{ matrix.artifact_name }}
 
-      - name: Build and Extract Binaries
-        run: make run-ci-image cpu_arch=${{ matrix.cpu_arch }}
-
-      - name: Upload Binaries
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.cpu_arch }}
+          name: binaries-${{ matrix.os }}-${{ matrix.arch }}
           path: bin/
 
   commit-and-tag:
@@ -55,8 +79,10 @@ jobs:
       - name: Move binaries to bin directory
         run: |
           mkdir -p bin
-          cp bin-artifacts/binaries-arm64/* bin/
-          cp bin-artifacts/binaries-amd64/* bin/
+          cp bin-artifacts/binaries-linux-arm64/* bin/
+          cp bin-artifacts/binaries-linux-amd64/* bin/
+          cp bin-artifacts/binaries-macos-arm64/* bin/
+          cp bin-artifacts/binaries-macos-amd64/* bin/
           rm -rf bin-artifacts
 
       - name: Commit and Push Release
