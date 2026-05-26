@@ -151,10 +151,61 @@ func sortChildren(nodes []*Node) {
 	}
 }
 
+// CollectAliases merges the `aliases:` declarations from every parsed file
+// into a single global map. When two files declare the same alias key with
+// different canonical values, the first one encountered (in walk order)
+// wins and the conflict is logged at warn level. Returns an empty map when
+// no file declares any aliases.
+func CollectAliases(files []StandardsFile) map[string]string {
+	merged := map[string]string{}
+	for _, file := range files {
+		for alias, canonical := range file.Header.Aliases {
+			if existing, ok := merged[alias]; ok && existing != canonical {
+				log.WithFields(log.Fields{
+					"alias":     alias,
+					"canonical": existing,
+					"ignored":   canonical,
+					"source":    file.Path,
+				}).Warn("conflicting alias declaration; keeping first")
+				continue
+			}
+			merged[alias] = canonical
+		}
+	}
+	return merged
+}
+
+// NormalizeTopics rewrites each file's Topics in place: any topic whose
+// value is a key in aliases is replaced by its canonical form, and the
+// resulting list is deduplicated while preserving first-occurrence order.
+// Aliasing is non-transitive (single-level): if `a → b` and `b → c` are
+// both declared, `a` resolves to `b`. No-op when aliases is empty.
+func NormalizeTopics(files []StandardsFile, aliases map[string]string) {
+	if len(aliases) == 0 {
+		return
+	}
+	for i, file := range files {
+		seen := map[string]bool{}
+		out := make([]string, 0, len(file.Header.Topics))
+		for _, t := range file.Header.Topics {
+			if canonical, ok := aliases[t]; ok {
+				t = canonical
+			}
+			if seen[t] {
+				continue
+			}
+			seen[t] = true
+			out = append(out, t)
+		}
+		files[i].Header.Topics = out
+	}
+}
+
 // GenerateStandardsTree walks the standards repository rooted at clonePath,
-// builds the standards tree from each Markdown file's frontmatter, stamps
-// the current time as GeneratedAt, and writes the YAML-serialized tree to
-// outputPath. The parent directory of outputPath must already exist.
+// builds the standards tree from each Markdown file's frontmatter, applies
+// any declared topic aliases, stamps the current time as GeneratedAt, and
+// writes the YAML-serialized tree to outputPath. The parent directory of
+// outputPath must already exist.
 func GenerateStandardsTree(clonePath, outputPath string) error {
 	log.WithFields(log.Fields{
 		"clone_path":  clonePath,
@@ -168,6 +219,9 @@ func GenerateStandardsTree(clonePath, outputPath string) error {
 	log.WithFields(log.Fields{
 		"count": len(headers),
 	}).Debug("creating standards tree")
+
+	aliases := CollectAliases(headers)
+	NormalizeTopics(headers, aliases)
 
 	tree := BuildHierarchy(headers)
 	tree.GeneratedAt = nowFn().UTC().Format(time.RFC3339)

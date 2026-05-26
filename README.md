@@ -94,11 +94,35 @@ The following fields can be included in the frontmatter of a standards file:
 | --- | --- | --- |
 | `title` | Yes | Human-readable name of the standard |
 | `description` | Yes | Brief summary of what the standard covers |
-| `scope` | Yes | Glob pattern for file extensions the standard applies to (e.g. `*.go`, `*.py`, `*` for all) |
+| `scope` | Yes | Glob pattern (or list of glob patterns) for file extensions the standard applies to (e.g. `*.go`, `*.py`, `*` for all) |
 | `topics` | Yes | List of frameworks, tools, or domains the standard relates to (e.g. `golang`, `rest`, `gin-gonic`) |
 | `parent` | No | Relative path to a parent standard file — used to build the hierarchy |
+| `aliases` | No | Map of `synonym → canonical` topic names. Applied globally to every node's topics at index time |
+
+`scope` accepts either a single glob (`scope: '*.go'`) or a list of globs (`scope: ['*.js', '*.ts', '*.vue']`) — useful for standards that apply across related extensions.
 
 If a markdown file does not contain valid frontmatter, it will simply be ignored and wont be included in the index.
+
+#### Topic aliases
+
+Topic vocabulary drifts over time: one standards file says `postgres`, another says `postgresql`, and an agent matching one won't match the other. Declare an `aliases:` block in any standards file's frontmatter to map synonyms onto a canonical name. The tool merges aliases from every file, applies them at index time, and writes only canonical topics to the tree:
+
+```yaml
+---
+title: General Code Standards
+description: ...
+scope: '*'
+topics:
+- general
+aliases:
+  postgres: postgresql
+  js: javascript
+  ts: typescript
+  py: python
+---
+```
+
+Aliases are global (not scoped to the file declaring them), single-level (no transitive resolution), and the first declaration wins on conflict. Topics that collapse onto an existing canonical are deduplicated.
 
 ## Installation
 

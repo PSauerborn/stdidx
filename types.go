@@ -25,13 +25,17 @@ func (s *Scope) UnmarshalYAML(unmarshal func(any) error) error {
 
 // StandardsHeader is the YAML frontmatter of a standards Markdown file.
 // Parent, when set, is a path to another standards file (relative to the
-// standards repo root) and is used to build the hierarchical tree.
+// standards repo root) and is used to build the hierarchical tree. Aliases,
+// when set, declares synonym → canonical mappings that the tool applies
+// globally to every node's topics at index time; see CollectAliases and
+// NormalizeTopics in tree.go.
 type StandardsHeader struct {
-	Title       string   `yaml:"title" validate:"required"`
-	Description string   `yaml:"description" validate:"required"`
-	Scope       Scope    `yaml:"scope" validate:"required"`
-	Topics      []string `yaml:"topics" validate:"required"`
-	Parent      *string  `yaml:"parent" validate:"omitempty"`
+	Title       string            `yaml:"title" validate:"required"`
+	Description string            `yaml:"description" validate:"required"`
+	Scope       Scope             `yaml:"scope" validate:"required"`
+	Topics      []string          `yaml:"topics" validate:"required"`
+	Parent      *string           `yaml:"parent" validate:"omitempty"`
+	Aliases     map[string]string `yaml:"aliases" validate:"omitempty"`
 }
 
 // StandardsFile pairs a parsed StandardsHeader with the path of the file it
