@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -22,6 +23,11 @@ func getNodeCount(nodes []*Node, count int) int {
 
 func init() {
 	log.SetLevel(log.DebugLevel)
+	// Pin the clock so GenerateStandardsTree's generated_at field is stable
+	// across runs, enabling byte-equality golden-file comparison in tests.
+	nowFn = func() time.Time {
+		return time.Date(2026, 5, 26, 0, 0, 0, 0, time.UTC)
+	}
 }
 
 func TestSync(t *testing.T) {

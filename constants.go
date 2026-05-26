@@ -11,24 +11,21 @@ const (
 const SuggestedAgentInstructionsTemplate = `When working on a task, consult the standards tree in %s
 to find applicable coding standards.
 
-1. Always start at the root nodes. Read any root node whose scope
-   matches the files you're working with or whose scope is "*".
+1. Locate every node — at any depth in the tree — whose scope, topics, or
+   description matches your current context. A node matches on:
 
-2. For each node you read, check its children. Descend into a child
-   if its scope or tags match your current context.
+   - scope: any entry is "*" or matches a file extension you're editing.
+   - topics: any topic matches the project's detected frameworks/tools
+     (e.g. if package.json declares "react" as a dependency, the "react"
+     topic matches).
+   - description: the description semantically describes the task you're
+     working on.
 
-3. Stop descending a branch when no children match your context.
+2. For each matched node, also read every ancestor in its chain back to the
+   root. Standards at every level on the path apply — a parent is not
+   optional just because the parent itself wasn't directly matched.
 
-4. Collect all matching nodes from root to leaf. Standards at every
-   level in the path apply — a child does not replace its parent,
-   it adds to it.
+3. If a child standard contradicts an ancestor, the child takes precedence.
 
-5. If a child standard contradicts a parent, the child takes precedence.
-
-To determine if a node matches your context:
-- description: compare the description of the node to the task you're working on
-- scope: compare against the file extensions you're editing
-  ("*.py", "*.ts", "*" matches everything)
-- topics: compare against the project's detected frameworks/tools
-  (e.g. if package.json has "react" as a dependency, the "react"
-  topic matches)`
+4. The "path" field on each node is relative to the directory the standards
+   were synced into. Prepend the clone path (default ~/.stdidx) when reading.`

@@ -2,16 +2,20 @@ package main
 
 import (
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/adrg/frontmatter"
 	"github.com/go-playground/validator/v10"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
+
+// nowFn returns the current time. Exposed as a package variable so tests can
+// pin the clock for deterministic golden-file comparisons.
+var nowFn = time.Now
 
 // ExtractMDHeader reads the Markdown file at path and parses its YAML
 // frontmatter into a StandardsHeader. A file whose frontmatter fails struct
@@ -46,10 +50,10 @@ func ExtractMDHeader(path string) (*StandardsHeader, error) {
 
 // ParseMDDocuments recursively walks root and returns a StandardsFile for
 // every Markdown file with valid frontmatter. Files without valid frontmatter
-// are skipped with a warning. Each returned file's Header.Parent (if set) is
-// rewritten from a path relative to root into the same root-prefixed form
-// that filepath.WalkDir produces for its visited paths, so that BuildHierarchy
-// can match parents by Path.
+// are skipped with a warning. Each StandardsFile.Path is stored as a slash-
+// separated path relative to root, matching the form `parent:` is authored
+// in. BuildHierarchy can therefore look parents up directly without further
+// rewriting.
 func ParseMDDocuments(root string) ([]StandardsFile, error) {
 	headers := make([]StandardsFile, 0)
 
@@ -70,30 +74,24 @@ func ParseMDDocuments(root string) ([]StandardsFile, error) {
 			return err
 		}
 
-		if header != nil {
-			headers = append(headers, StandardsFile{
-				Path:   path,
-				Header: *header,
-			})
-		} else {
+		if header == nil {
 			log.WithFields(log.Fields{
 				"path": path,
 			}).Warn("found markdown file without valid header. skipping.")
+			return nil
 		}
 
+		relPath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		headers = append(headers, StandardsFile{
+			Path:   filepath.ToSlash(relPath),
+			Header: *header,
+		})
 		return nil
 	})
 
-	// Rewrite each Parent (originally relative to the standards repo root, as
-	// authored in the frontmatter) into the same root-prefixed form that
-	// filepath.WalkDir produced for Path, so BuildHierarchy can look parents
-	// up directly in the keyed-by-Path nodes map.
-	for i, file := range headers {
-		if file.Header.Parent != nil {
-			augmentedPath := path.Join(root, *file.Header.Parent)
-			headers[i].Header.Parent = &augmentedPath
-		}
-	}
 	return headers, err
 }
 
@@ -114,7 +112,6 @@ func BuildHierarchy(files []StandardsFile) StandardsTree {
 			Scope:       file.Header.Scope,
 			Topics:      file.Header.Topics,
 			Path:        file.Path,
-			Children:    []*Node{},
 		}
 	}
 
@@ -155,9 +152,9 @@ func sortChildren(nodes []*Node) {
 }
 
 // GenerateStandardsTree walks the standards repository rooted at clonePath,
-// builds the standards tree from each Markdown file's frontmatter, and writes
-// the YAML-serialized tree to outputPath. The parent directory of outputPath
-// must already exist.
+// builds the standards tree from each Markdown file's frontmatter, stamps
+// the current time as GeneratedAt, and writes the YAML-serialized tree to
+// outputPath. The parent directory of outputPath must already exist.
 func GenerateStandardsTree(clonePath, outputPath string) error {
 	log.WithFields(log.Fields{
 		"clone_path":  clonePath,
@@ -173,6 +170,7 @@ func GenerateStandardsTree(clonePath, outputPath string) error {
 	}).Debug("creating standards tree")
 
 	tree := BuildHierarchy(headers)
+	tree.GeneratedAt = nowFn().UTC().Format(time.RFC3339)
 
 	data, err := yaml.Marshal(tree)
 	if err != nil {
