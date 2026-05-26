@@ -1,9 +1,14 @@
 package main
 
 const (
-	DefaultClonePath = ".stdidx"
+	DefaultCloneDirName = ".stdidx"
+	TreeFileName        = "standards-tree.yaml"
+)
 
-	SuggestedAgentInstructions = `When working on a task, consult the standards tree in standards-tree.yaml
+// SuggestedAgentInstructionsTemplate is a printf-style template for the prompt
+// printed to the user after a successful sync or index. The single %s placeholder
+// is substituted with the absolute path to the generated standards tree.
+const SuggestedAgentInstructionsTemplate = `When working on a task, consult the standards tree in %s
 to find applicable coding standards.
 
 1. Always start at the root nodes. Read any root node whose scope
@@ -27,4 +32,3 @@ To determine if a node matches your context:
 - topics: compare against the project's detected frameworks/tools
   (e.g. if package.json has "react" as a dependency, the "react"
   topic matches)`
-)

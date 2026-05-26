@@ -7,16 +7,16 @@ A lightweight, local-first CLI tool that
 
 ## Quickstart
 
-Run the `stdidx sync` command to sync a standards repository to your project directory and generate the index tree file at `standards-tree.yaml`.
+Run the `stdidx sync` command to sync a standards repository to your machine and generate the index tree file. By default, both the cloned repository and the generated `standards-tree.yaml` are written to `~/.stdidx/`, so one sync can serve every project on the machine.
 
 ```bash
 stdidx sync -r https://github.com/example/coding-standards.git
 ```
 
-Instruct your agent to use the `standards-tree.yaml` file to find relevant coding standards based on the type of task being worked on, the file type, and the frameworks/tools being used.
+Instruct your agent to use the generated `~/.stdidx/standards-tree.yaml` file to find relevant coding standards based on the type of task being worked on, the file type, and the frameworks/tools being used.
 
 ```txt
-When working on a task, consult the standards tree in standards-tree.yaml
+When working on a task, consult the standards tree in ~/.stdidx/standards-tree.yaml
 to find applicable coding standards.
 
 1. Always start at the root nodes. Read any root node whose scope
@@ -54,7 +54,7 @@ Coding standards are essential for ensuring that agents deliver code that is hig
 
 ### How does `stdidx` sync standards?
 
-`stdidx` clones the standards repository to a local directory using a simple `git clone` command. By default, it clones to `.stdidx` in the root of your project directory.
+`stdidx` clones the standards repository to a local directory using a simple `git clone` command. By default, it clones to `~/.stdidx/` — a dedicated, user-level directory shared across every project on the machine. The location can be overridden with the `--clone-path` / `-p` flag if you'd rather keep a per-project clone.
 
 ### How does `stdidx` index files?
 
@@ -136,7 +136,7 @@ go build -o stdidx
 Clone a standards repository, parse all Markdown frontmatter, and generate `standards-tree.yaml` in one step:
 
 ```bash
-stdidx sync --repository <git-url> [--branch <branch> | --tag <tag>]
+stdidx sync --repository <git-url> [--branch <branch> | --tag <tag>] [--clone-path <dir>]
 ```
 
 **Flags:**
@@ -146,8 +146,9 @@ stdidx sync --repository <git-url> [--branch <branch> | --tag <tag>]
 | `--repository` | `-r` | Yes | Git repository URL to clone |
 | `--branch` | `-b` | No | Branch to checkout |
 | `--tag` | `-t` | No | Tag to checkout |
+| `--clone-path` | `-p` | No | Directory to clone standards into (default: `~/.stdidx`) |
 
-> **Note:** `--branch` and `--tag` are mutually exclusive.
+> **Note:** `--branch` and `--tag` are mutually exclusive. A leading `~` or `~/` in `--clone-path` is expanded to your home directory.
 
 **Example:**
 
@@ -155,22 +156,28 @@ stdidx sync --repository <git-url> [--branch <branch> | --tag <tag>]
 stdidx sync -r git@github.com:your-org/coding-standards.git -b main
 ```
 
-The repository is cloned to a local `.stdidx/` directory (overwritten on each sync), the tree is built, and the output is written to `standards-tree.yaml`.
+The repository is cloned into `~/.stdidx/` by default (overwritten on each sync), the tree is built, and the output is written to `~/.stdidx/standards-tree.yaml`.
 
 ### `index` — Re-index an Existing Clone
 
-If the standards repository has already been cloned (i.e. the `.stdidx/` directory exists), you can regenerate the tree without re-cloning:
+If the standards repository has already been cloned, you can regenerate the tree without re-cloning:
 
 ```bash
-stdidx index
+stdidx index [--clone-path <dir>]
 ```
+
+**Flags:**
+
+| Flag | Alias | Required | Description |
+| --- | --- | --- | --- |
+| `--clone-path` | `-p` | No | Directory containing the standards to index (default: `~/.stdidx`) |
 
 ### Integrating with Your Agent
 
-After running `sync` or `index`, `std-index` prints suggested instructions that you can add to your AI agent's prompt or configuration. The instructions tell the agent how to walk the generated tree:
+After running `sync` or `index`, `std-index` prints suggested instructions that you can add to your AI agent's prompt or configuration. The instructions reference the absolute path to the generated tree (by default `~/.stdidx/standards-tree.yaml`) and tell the agent how to walk it:
 
 ```
-When working on a task, consult the standards tree in standards-tree.yaml
+When working on a task, consult the standards tree in ~/.stdidx/standards-tree.yaml
 to find applicable coding standards.
 
 1. Always start at the root nodes. Read any root node whose scope

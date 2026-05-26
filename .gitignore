@@ -31,4 +31,4 @@ go.work.sum
 # .idea/
 .vscode/
 
-.stdidx/
+PLAN.md

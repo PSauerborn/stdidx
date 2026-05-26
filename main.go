@@ -3,17 +3,53 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
-func PrintSuggestedInstructions() {
-	println("\nDon't forget to instruct your agent to use the standards index. Suggested prompt:")
-	println("\n" + SuggestedAgentInstructions + "\n")
+// DefaultClonePath returns the default directory standards are cloned into.
+// It resolves to "$HOME/.stdidx" when the home directory can be determined,
+// and falls back to the relative ".stdidx" if it cannot.
+func DefaultClonePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.WithError(err).Warn("could not resolve home directory; falling back to relative path")
+		return DefaultCloneDirName
+	}
+	return filepath.Join(home, DefaultCloneDirName)
 }
 
+// ExpandPath expands a leading "~" or "~/" in p to the user's home directory.
+// Other path forms (including "~user/...") are returned unchanged.
+func ExpandPath(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~"))
+}
+
+// PrintSuggestedInstructions prints suggested agent instructions referencing
+// the absolute path to the generated standards tree.
+func PrintSuggestedInstructions(treePath string) {
+	println("\nDon't forget to instruct your agent to use the standards index. Suggested prompt:")
+	println("\n" + fmt.Sprintf(SuggestedAgentInstructionsTemplate, treePath) + "\n")
+}
+
+// Sync clones the remote standards repository described by repository into
+// repository.ClonePath (removing any existing contents at that location
+// first) and writes the generated standards tree to repository.ClonePath +
+// "/" + TreeFileName. The ctx parameter is accepted for symmetry with the
+// CLI command surface but is not currently propagated to git or filesystem
+// operations.
 func Sync(ctx context.Context, cloner GitCloner, repository GitRepository) error {
 	log.WithFields(log.Fields{
 		"repository": repository.Repository,
@@ -21,7 +57,6 @@ func Sync(ctx context.Context, cloner GitCloner, repository GitRepository) error
 		"tag":        repository.Tag,
 	}).Info("syncing standards library")
 
-	// check if already exists
 	if _, err := os.Stat(repository.ClonePath); err == nil {
 		log.WithFields(log.Fields{
 			"clone_path": repository.ClonePath,
@@ -37,11 +72,13 @@ func Sync(ctx context.Context, cloner GitCloner, repository GitRepository) error
 		return err
 	}
 
+	treePath := filepath.Join(repository.ClonePath, TreeFileName)
 	log.WithFields(log.Fields{
 		"clone_path": repository.ClonePath,
+		"tree_path":  treePath,
 	}).Info("generating standards index")
 
-	if err := GenerateStandardsTree(repository.ClonePath); err != nil {
+	if err := GenerateStandardsTree(repository.ClonePath, treePath); err != nil {
 		log.WithError(err).Error("failed to generate standards index")
 		return err
 	}
@@ -50,12 +87,19 @@ func Sync(ctx context.Context, cloner GitCloner, repository GitRepository) error
 	return nil
 }
 
+// Index regenerates the standards tree from an existing standards repository
+// at clonePath without re-cloning. The tree is written to
+// clonePath + "/" + TreeFileName. The ctx parameter is accepted for symmetry
+// with the CLI command surface but is not currently propagated to filesystem
+// operations.
 func Index(ctx context.Context, clonePath string) error {
+	treePath := filepath.Join(clonePath, TreeFileName)
 	log.WithFields(log.Fields{
 		"clone_path": clonePath,
+		"tree_path":  treePath,
 	}).Info("generating standards index")
 
-	if err := GenerateStandardsTree(clonePath); err != nil {
+	if err := GenerateStandardsTree(clonePath, treePath); err != nil {
 		log.WithError(err).Error("failed to generate standards index")
 		return err
 	}
@@ -89,6 +133,12 @@ func main() {
 						Aliases: []string{"t"},
 						Usage:   "Tag to checkout",
 					},
+					&cli.StringFlag{
+						Name:    "clone-path",
+						Aliases: []string{"p"},
+						Usage:   "Directory to clone standards into",
+						Value:   DefaultClonePath(),
+					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					branch := cmd.String("branch")
@@ -98,28 +148,38 @@ func main() {
 						return errors.New("only one of --branch or --tag can be specified, not both")
 					}
 
+					clonePath := ExpandPath(cmd.String("clone-path"))
 					repo := GitRepository{
 						Repository: cmd.String("repository"),
 						Branch:     branch,
 						Tag:        tag,
-						ClonePath:  DefaultClonePath,
+						ClonePath:  clonePath,
 					}
 					cloner := &ExecGitCloner{}
 					if err := Sync(ctx, cloner, repo); err != nil {
 						return err
 					}
-					PrintSuggestedInstructions()
+					PrintSuggestedInstructions(filepath.Join(clonePath, TreeFileName))
 					return nil
 				},
 			},
 			{
 				Name:  "index",
 				Usage: "Index a standards library",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "clone-path",
+						Aliases: []string{"p"},
+						Usage:   "Directory containing the standards to index",
+						Value:   DefaultClonePath(),
+					},
+				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if err := Index(ctx, DefaultClonePath); err != nil {
+					clonePath := ExpandPath(cmd.String("clone-path"))
+					if err := Index(ctx, clonePath); err != nil {
 						return err
 					}
-					PrintSuggestedInstructions()
+					PrintSuggestedInstructions(filepath.Join(clonePath, TreeFileName))
 					return nil
 				},
 			},
