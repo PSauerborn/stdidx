@@ -13,6 +13,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// ExtractMDHeader reads the Markdown file at path and parses its YAML
+// frontmatter into a StandardsHeader. A file whose frontmatter fails struct
+// validation (e.g. missing required fields, or no frontmatter at all) returns
+// (nil, nil) rather than an error — this lets callers silently skip arbitrary
+// Markdown files (READMEs, etc.) that happen to live in a standards repo.
+// Returns a non-nil error only when the file cannot be read or its frontmatter
+// is syntactically malformed.
 func ExtractMDHeader(path string) (*StandardsHeader, error) {
 	log.WithFields(log.Fields{
 		"path": path,
@@ -37,6 +44,12 @@ func ExtractMDHeader(path string) (*StandardsHeader, error) {
 	return &header, nil
 }
 
+// ParseMDDocuments recursively walks root and returns a StandardsFile for
+// every Markdown file with valid frontmatter. Files without valid frontmatter
+// are skipped with a warning. Each returned file's Header.Parent (if set) is
+// rewritten from a path relative to root into the same root-prefixed form
+// that filepath.WalkDir produces for its visited paths, so that BuildHierarchy
+// can match parents by Path.
 func ParseMDDocuments(root string) ([]StandardsFile, error) {
 	headers := make([]StandardsFile, 0)
 
@@ -52,7 +65,6 @@ func ParseMDDocuments(root string) ([]StandardsFile, error) {
 			return nil
 		}
 
-		// read contents of file and parse frontmatter.
 		header, err := ExtractMDHeader(path)
 		if err != nil {
 			return err
@@ -72,10 +84,10 @@ func ParseMDDocuments(root string) ([]StandardsFile, error) {
 		return nil
 	})
 
-	// ensure that the parent path is absolute
-	// this is required as relationships are defined
-	// relative to the directory the code is cloned into,
-	// but the tree is built from the root of the repository.
+	// Rewrite each Parent (originally relative to the standards repo root, as
+	// authored in the frontmatter) into the same root-prefixed form that
+	// filepath.WalkDir produced for Path, so BuildHierarchy can look parents
+	// up directly in the keyed-by-Path nodes map.
 	for i, file := range headers {
 		if file.Header.Parent != nil {
 			augmentedPath := path.Join(root, *file.Header.Parent)
@@ -85,9 +97,11 @@ func ParseMDDocuments(root string) ([]StandardsFile, error) {
 	return headers, err
 }
 
-// BuildHierarchy builds a nested tree from a flat list of headers. Headers
-// without a Parent are root nodes. Headers with a Parent are nested under the
-// node whose Scope matches the parent value.
+// BuildHierarchy assembles a StandardsTree from a flat list of StandardsFile.
+// Files without a Parent become root nodes. Files with a Parent are attached
+// as Children of the node whose Path equals the parent value; files whose
+// parent does not resolve are logged and dropped. Children at every level
+// are sorted alphabetically by Title.
 func BuildHierarchy(files []StandardsFile) StandardsTree {
 
 	nodes := map[string]*Node{}
@@ -128,6 +142,9 @@ func BuildHierarchy(files []StandardsFile) StandardsTree {
 	return StandardsTree{Nodes: roots}
 }
 
+// sortChildren sorts the provided slice alphabetically by Title in place and
+// recurses into each node's Children. The resulting deterministic order is
+// what makes byte-for-byte golden-file comparisons in tests possible.
 func sortChildren(nodes []*Node) {
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].Title < nodes[j].Title
@@ -137,12 +154,17 @@ func sortChildren(nodes []*Node) {
 	}
 }
 
-func GenerateStandardsTree(path string) error {
+// GenerateStandardsTree walks the standards repository rooted at clonePath,
+// builds the standards tree from each Markdown file's frontmatter, and writes
+// the YAML-serialized tree to outputPath. The parent directory of outputPath
+// must already exist.
+func GenerateStandardsTree(clonePath, outputPath string) error {
 	log.WithFields(log.Fields{
-		"path": path,
+		"clone_path":  clonePath,
+		"output_path": outputPath,
 	}).Debug("parsing standards files")
 
-	headers, err := ParseMDDocuments(path)
+	headers, err := ParseMDDocuments(clonePath)
 	if err != nil {
 		return err
 	}
@@ -157,7 +179,6 @@ func GenerateStandardsTree(path string) error {
 		return err
 	}
 
-	outputPath := "standards-tree.yaml"
 	if err := os.WriteFile(outputPath, data, 0644); err != nil {
 		return err
 	}

@@ -28,25 +28,27 @@ func TestSync(t *testing.T) {
 	t.Run("success - existing directory", func(t *testing.T) {
 		ctx := context.Background()
 
-		treePath := "standards-tree.yaml"
-		// assert that treePath does not exists
-		assert.NoFileExists(t, treePath)
+		clonePath := filepath.Join("tests", "tmp")
+		treePath := filepath.Join(clonePath, "standards-tree.yaml")
 
 		// create temporary directory to use
-		err := os.Mkdir("tests/tmp", 0755)
+		err := os.Mkdir(clonePath, 0755)
 		assert.NoError(t, err)
 
 		defer func() {
-			if err := os.RemoveAll("tests/tmp"); err != nil {
+			if err := os.RemoveAll(clonePath); err != nil {
 				t.Errorf("os.RemoveAll() error = %v", err)
 			}
 		}()
+
+		// assert that treePath does not exists
+		assert.NoFileExists(t, treePath)
 
 		cloner := NewMockGitCloner("tests/mock_repository")
 		repo := GitRepository{
 			Repository: "https://github.com/golang/go",
 			Branch:     "master",
-			ClonePath:  "tests/tmp",
+			ClonePath:  clonePath,
 		}
 
 		err = Sync(ctx, cloner, repo)
@@ -66,24 +68,22 @@ func TestSync(t *testing.T) {
 		}
 
 		assert.Equal(t, string(expected), string(actual))
-
-		err = os.Remove(treePath)
-		assert.NoError(t, err)
 	})
 
 	t.Run("success - non-existing directory", func(t *testing.T) {
 		ctx := context.Background()
 
-		treePath := "standards-tree.yaml"
-		// assert that treePath does not exists
-		assert.NoFileExists(t, treePath)
-
 		clonePath := filepath.Join("tests", "tmp")
+		treePath := filepath.Join(clonePath, "standards-tree.yaml")
+
 		defer func() {
 			if err := os.RemoveAll(clonePath); err != nil {
 				t.Errorf("os.RemoveAll() error = %v", err)
 			}
 		}()
+
+		// assert that treePath does not exists
+		assert.NoFileExists(t, treePath)
 
 		cloner := NewMockGitCloner("tests/mock_repository")
 		repo := GitRepository{
@@ -109,9 +109,6 @@ func TestSync(t *testing.T) {
 		}
 
 		assert.Equal(t, string(expected), string(actual))
-
-		err = os.Remove(treePath)
-		assert.NoError(t, err)
 	})
 }
 
@@ -149,18 +146,25 @@ func TestIndex(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ctx := context.Background()
 
-		treePath := "standards-tree.yaml"
+		clonePath := filepath.Join("tests", "tmp")
+		treePath := filepath.Join(clonePath, "standards-tree.yaml")
+
+		err := os.Mkdir(clonePath, 0755)
+		assert.NoError(t, err)
+
+		defer func() {
+			if err := os.RemoveAll(clonePath); err != nil {
+				t.Errorf("os.RemoveAll() error = %v", err)
+			}
+		}()
+
+		err = copyDir("tests/mock_repository", clonePath)
+		assert.NoError(t, err)
+
 		// assert that treePath does not exists
 		assert.NoFileExists(t, treePath)
 
-		err := os.Mkdir("tests/tmp", 0755)
-		assert.NoError(t, err)
-
-		err = copyDir("tests/mock_repository", "tests/tmp")
-		assert.NoError(t, err)
-
-		path := filepath.Join("tests", "tmp")
-		err = Index(ctx, path)
+		err = Index(ctx, clonePath)
 		assert.NoError(t, err)
 
 		// assert that treePath exists
@@ -177,15 +181,5 @@ func TestIndex(t *testing.T) {
 		}
 
 		assert.Equal(t, string(expected), string(actual))
-
-		err = os.Remove(treePath)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = os.RemoveAll("tests/tmp")
-		if err != nil {
-			t.Fatal(err)
-		}
 	})
 }
